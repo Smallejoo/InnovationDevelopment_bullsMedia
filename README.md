@@ -34,7 +34,8 @@
 
 
         5. Right now the program itself is pretty light. The functions I wrote are simple, and no serious heavy-duty work is happening.
-            In my opinion, the most important thing is not to miss any requests.So to improve, it would be great to add more server processes so we don't miss any requests,plus upload the database to MongoDB Atlas (cloud DB), even though it's more costly.
+            In my opinion, the most important thing is not to miss any requests.So to improve, it would be great to add more server 
+            processes so we don't miss any requests,plus upload the database to MongoDB Atlas (cloud DB), even though it's more costly.
             For now, it is just local.
 
 

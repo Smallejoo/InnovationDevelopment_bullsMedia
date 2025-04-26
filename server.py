@@ -30,15 +30,29 @@ def encode_params(keyword: str, src: str, creative: str) :
 
 # the decoding function where we feed it with our encripted code 
 # and we get our 3 parameters back .
-def decode_param(our_param: str) :
+def decode_param(our_param: str):
     try:
-        #we got a string we invert it into bits decode back into our first bits and decode it back into a string . 
-        json_str = base64.urlsafe_b64decode(our_param.encode()).decode()
-        return json.loads(json_str)  # turn json into pyton dict 
-    
+        # First, search for the code either in our_param OR original_param
+        record = collection.find_one({
+            "$or": [
+                {"our_param": our_param},
+                {"original_param": our_param}
+            ]
+        })
+
+        if record:
+            # Always decode the original_param (even if the code sent was original or refreshed)
+            original_code = record.get("original_param", record["our_param"]) # sarch for original code . 
+            json_str = base64.urlsafe_b64decode(original_code.encode()).decode()
+            return json.loads(json_str)
+
+        else:
+            # If not found in DB, try to decode the provided param directly (maybe pure base64)
+            json_str = base64.urlsafe_b64decode(our_param.encode()).decode()
+            return json.loads(json_str)
+
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid our_param")
-
 
 
 
@@ -54,7 +68,7 @@ async def redirect_user(keyword: str, src: str, creative: str):
     else: # if you did not find thouse key words we will create a new encrypted code . 
         our_param = encode_params(keyword, src, creative)
         #storing the key words and the code 
-        collection.insert_one({"keyword": keyword, "src": src, "creative": creative, "our_param": our_param})
+        collection.insert_one({"keyword": keyword, "src": src, "creative": creative, "our_param": our_param ,"original_param": our_param})
 
     # diffrent redirections . 
     if src.lower() == "google":
@@ -67,13 +81,13 @@ async def redirect_user(keyword: str, src: str, creative: str):
     redirect_url = f"{base_url}?{urlencode({'our_param': our_param})}"
     return RedirectResponse(redirect_url)
 
-@app.get("/retrieve_original")
-async def retrieve_original(our_param: str):
-    try:
-        data = decode_param(our_param) # just use the base64 encoding algo to get back our params 
-        return JSONResponse(content=data)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid our_param")
+#@app.get("/retrieve_original")
+#async def retrieve_original(our_param: str):
+#    try:
+#        data = decode_param(our_param) # just use the base64 encoding algo to get back our params 
+#        return JSONResponse(content=data)
+#    except Exception:
+#        raise HTTPException(status_code=400, detail="Invalid our_param")
     
     
 class RefreshRequest(BaseModel):
@@ -123,8 +137,10 @@ async def refresh_code(req: RefreshRequest):
         })      
 
     return {"new_our_param": new_param}
+
+
  # some thing that was not asked , creates new code only by feeding the old Pcode    
-@app.post("/refresh_by_code")
+@app.get("/refresh_by_code")
 async def refresh_by_code(code: str):
     if not code:
         raise HTTPException(status_code=400, detail="Missing code")
@@ -134,10 +150,11 @@ async def refresh_by_code(code: str):
     if not record:
         raise HTTPException(status_code=404, detail="Code not found")
 
-    new_param = str(uuid.uuid4())
+
+    new_param = str(uuid.uuid4()) 
     updates = {
-        "$set": {"our_param": new_param},
-        "$push": {"prev_params": code}
+        "$set": {"our_param": new_param}, 
+        "$push": {"prev_params": code} # we push the new code so we will have all of them there 
     }
 
     if "original_param" not in record:
